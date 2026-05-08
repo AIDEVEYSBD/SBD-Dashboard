@@ -595,12 +595,17 @@ export function getConversionStats(): ConversionStats {
   // Approval (incl. Overdue) — i.e. isCompletedLike("ICAA", status).
   const completed = icaa.filter((a) => isCompletedLike("ICAA", a.status));
 
-  // "Converted" = the source system has registered a child ISA. The
-  // authoritative signal is the ICAA's own "ISA Status" field; we also accept
-  // the synthetic isaIdLink (from Parent ICAA ID linkage in the seed) as a
-  // fallback for completeness.
+  // "Converted" = we have a verified linked ISA record in the imported data.
+  // The link comes from one of:
+  //   1. isaIdLink (extracted from "ISA Status Text Feild" or seed's
+  //      Parent ICAA ID linkage), AND the ISA exists in the dataset
+  //   2. seed-style Parent ICAA ID match
+  // We require an actual matching ISA so we don't mistakenly count records
+  // whose "ISA Status" is populated but the corresponding ISA isn't loaded.
+  const isaIds = new Set(isa.map((x) => x.isaId));
+  const isaParents = new Set(isa.map((x) => x.parentIcaaId).filter(Boolean) as string[]);
   const isConverted = (a: IcaaAssessment) =>
-    (a.isaStatus !== null && a.isaStatus !== "") || a.isaIdLink !== null;
+    (a.isaIdLink !== null && isaIds.has(a.isaIdLink)) || isaParents.has(a.id);
   const converted = completed.filter(isConverted);
 
   const monthly = lastNMonthKeys(10).map(({ key, label, date }) => {
