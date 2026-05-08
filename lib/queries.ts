@@ -589,14 +589,23 @@ export interface ConversionStats {
 export function getConversionStats(): ConversionStats {
   const { icaa, isa } = getDataset();
 
-  // "Completed" = status === "Completed" (the source-system flag is authoritative).
-  const completed = icaa.filter((a) => baseStatus(a.status) === "Completed");
-  const converted = completed.filter((a) => a.isaIdLink);
+  // "Completed" for conversion analysis = any ICAA past the cyber-approval
+  // line: status is Completed, ICAA Archived, or Pending Business Owner
+  // Approval (incl. Overdue) — i.e. isCompletedLike("ICAA", status).
+  const completed = icaa.filter((a) => isCompletedLike("ICAA", a.status));
+
+  // "Converted" = the source system has registered a child ISA. The
+  // authoritative signal is the ICAA's own "ISA Status" field; we also accept
+  // the synthetic isaIdLink (from Parent ICAA ID linkage in the seed) as a
+  // fallback for completeness.
+  const isConverted = (a: IcaaAssessment) =>
+    (a.isaStatus !== null && a.isaStatus !== "") || a.isaIdLink !== null;
+  const converted = completed.filter(isConverted);
 
   const monthly = lastNMonthKeys(10).map(({ key, label, date }) => {
     const s = startOfMonth(date), e = endOfMonth(date);
     const finM = completed.filter((a) => a.cyberApprovalDate && a.cyberApprovalDate >= s && a.cyberApprovalDate <= e);
-    const convM = finM.filter((a) => a.isaIdLink);
+    const convM = finM.filter(isConverted);
     return {
       month: key,
       label,
@@ -633,10 +642,12 @@ export function getConversionStats(): ConversionStats {
   ];
 
   // Conversion lag — days between ICAA completion (cyber approval) and ISA send.
+  // Look up the ISA by isaIdLink first (preferred), fall back to Parent ICAA ID.
+  const isaById = new Map(isa.map((x) => [x.isaId, x] as const));
   const isaByParent = new Map(isa.filter((x) => x.parentIcaaId).map((x) => [x.parentIcaaId!, x] as const));
   const lags: number[] = [];
   for (const a of converted) {
-    const child = isaByParent.get(a.id);
+    const child = (a.isaIdLink && isaById.get(a.isaIdLink)) ?? isaByParent.get(a.id);
     if (!child) continue;
     if (a.cyberApprovalDate && child.dateSent) {
       lags.push(Math.max(0, (child.dateSent.getTime() - a.cyberApprovalDate.getTime()) / DAY));
@@ -647,7 +658,7 @@ export function getConversionStats(): ConversionStats {
   const cats = ["Low", "Medium", "High", "Critical"] as const;
   const byRiskCat = cats.map((cat) => {
     const finCat = completed.filter((a) => a.inherentRiskCategorization === cat);
-    const convCat = finCat.filter((a) => a.isaIdLink);
+    const convCat = finCat.filter(isConverted);
     return {
       cat,
       completed: finCat.length,

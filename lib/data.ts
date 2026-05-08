@@ -31,6 +31,15 @@ function splitMulti(value: string): string[] {
   return value.split(/[;,]\s*/).map((s) => s.trim()).filter(Boolean);
 }
 
+// Pull an ISA ID out of the "ISA Status Text Feild" string. The source-system
+// format is roughly "ISA-NNNNNN — <status>", but we tolerate optional dashes
+// and case variations.
+function extractIsaId(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const m = String(text).match(/ISA[-\s]?(\d+)/i);
+  return m ? `ISA-${m[1]}` : null;
+}
+
 function mapIcaa(r: RawIcaa): IcaaAssessment {
   return {
     kind: "ICAA",
@@ -77,7 +86,10 @@ function mapIcaa(r: RawIcaa): IcaaAssessment {
     newPrioritySystem: r["New Priority System"],
     potentialKfas: r["Potential KFAS"],
     isaStatus: r["ISA Status"],
-    isaIdLink: null,
+    // Try to pull the ISA ID from the source system's text field first.
+    // The post-mapping pass below also wires this from Parent ICAA ID
+    // when the seed-style linkage is present.
+    isaIdLink: extractIsaId(r["ISA Status Text Feild"]),
     q1Response: r["Q1 Response"],
     q5Response: r["Q 5 Response"],
     q14Response: r["Q14 Response"],
@@ -176,13 +188,18 @@ export function getDataset(): Dataset {
   const icaa = (raw.icaa ?? []).map(mapIcaa);
   const isa = (raw.isa ?? []).map(mapIsa);
 
+  // Reinforce isaIdLink from the synthetic Parent ICAA ID linkage if present
+  // (used by seed data; real Excel exports rely on the text-field extraction
+  // above).
   const isaByParent = new Map<string, IsaAssessment>();
   for (const x of isa) {
     if (x.parentIcaaId) isaByParent.set(x.parentIcaaId, x);
   }
   for (const a of icaa) {
-    const child = isaByParent.get(a.id);
-    if (child) a.isaIdLink = child.isaId;
+    if (!a.isaIdLink) {
+      const child = isaByParent.get(a.id);
+      if (child) a.isaIdLink = child.isaId;
+    }
   }
 
   cached = { dataset: { icaa, isa, people: PEOPLE }, mtime };
