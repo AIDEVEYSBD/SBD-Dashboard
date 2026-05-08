@@ -184,9 +184,10 @@ export function ImportForm() {
           <div>
             <h3 className="card-title">Upload Excel exports</h3>
             <p className="card-sub">
-              Drop the latest ICAA and/or ISA workbook. Column matching is case-insensitive
-              and tolerates minor typos (Geography↔Geograpy, Finalised↔Finalized, etc.). Existing IDs are
-              overwritten by default.
+              Drop the latest ICAA and/or ISA workbook. By default, rows whose ID matches an existing
+              record <strong>fully replace</strong> the existing entry — so the latest export wins.
+              New IDs are appended. Column matching is case-insensitive and tolerates minor typos
+              (Geography↔Geograpy, Finalised↔Finalized, Reuqesters↔Requesters, etc.).
             </p>
           </div>
         </div>
