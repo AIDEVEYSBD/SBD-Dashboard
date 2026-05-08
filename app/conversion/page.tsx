@@ -17,19 +17,19 @@ export default function ConversionPage() {
         <SectionHead
           eyebrow="ICAA → ISA"
           title={<>Triage to <em>deep review</em></>}
-          sub="What share of finalized ICAAs are escalated to a full ISA — and how long the handoff takes."
+          sub="What share of completed ICAAs are escalated to a full ISA — and how long the handoff takes."
         />
 
         <div className="grid-3">
-          <Card title="Conversion rate" sub="Finalized ICAAs that have a linked ISA.">
+          <Card title="Conversion rate" sub="Completed ICAAs that have a linked ISA.">
             <div style={{ display: "flex", justifyContent: "center", padding: "var(--s-3) 0" }}>
               <Ring value={stats.conversionPct} size={160} color="var(--accent)" label="converted" />
             </div>
             <div className="mono" style={{ fontSize: 12, textAlign: "center", color: "var(--ink-3)" }}>
-              {stats.convertedIcaa.toLocaleString()} of {stats.finalizedIcaa.toLocaleString()} finalized
+              {stats.convertedIcaa.toLocaleString()} of {stats.completedIcaa.toLocaleString()} completed
             </div>
           </Card>
-          <Card title="Median conversion lag" sub="Days between ICAA finalize and ISA send.">
+          <Card title="Median conversion lag" sub="Days between ICAA cyber approval and ISA send.">
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "var(--s-7) 0" }}>
               <div style={{ textAlign: "center" }}>
                 <div className="kpi-value tnum">{stats.conversionLagDaysMedian.toFixed(1)}<span className="unit">d</span></div>
@@ -44,8 +44,8 @@ export default function ConversionPage() {
                 <div className="eyebrow" style={{ marginTop: 6 }}>All ICAAs</div>
               </div>
               <div style={{ textAlign: "center" }}>
-                <div className="kpi-value tnum">{stats.finalizedIcaa.toLocaleString()}</div>
-                <div className="eyebrow" style={{ marginTop: 6 }}>Finalized</div>
+                <div className="kpi-value tnum">{stats.completedIcaa.toLocaleString()}</div>
+                <div className="eyebrow" style={{ marginTop: 6 }}>Completed</div>
               </div>
               <div style={{ textAlign: "center" }}>
                 <div className="kpi-value tnum" style={{ color: "var(--accent)" }}>{stats.convertedIcaa.toLocaleString()}</div>
@@ -60,11 +60,11 @@ export default function ConversionPage() {
         </Card>
 
         <div className="grid-2">
-          <Card title="Conversion by month" sub="Finalized ICAAs and the ones that converted.">
+          <Card title="Conversion by month" sub="Completed ICAAs and the ones that converted.">
             <StackedBarChart
               labels={stats.monthly.map((m) => m.label)}
               series={[
-                { label: "Finalized (no ISA)", values: stats.monthly.map((m) => m.finalized - m.converted), color: "var(--ink-5)" },
+                { label: "Completed (no ISA)", values: stats.monthly.map((m) => m.completed - m.converted), color: "var(--ink-5)" },
                 { label: "Converted to ISA", values: stats.monthly.map((m) => m.converted), color: "var(--accent)" },
               ]}
               height={220}
@@ -84,7 +84,7 @@ export default function ConversionPage() {
             <thead>
               <tr>
                 <th>Risk category</th>
-                <th style={{ textAlign: "right" }}>Finalized</th>
+                <th style={{ textAlign: "right" }}>Completed</th>
                 <th style={{ textAlign: "right" }}>Converted</th>
                 <th style={{ textAlign: "right" }}>Rate</th>
               </tr>
@@ -93,7 +93,7 @@ export default function ConversionPage() {
               {stats.byRiskCat.map((r) => (
                 <tr key={r.cat}>
                   <td>{r.cat}</td>
-                  <td className="num" style={{ textAlign: "right" }}>{r.finalized.toLocaleString()}</td>
+                  <td className="num" style={{ textAlign: "right" }}>{r.completed.toLocaleString()}</td>
                   <td className="num" style={{ textAlign: "right" }}>{r.converted.toLocaleString()}</td>
                   <td className="num" style={{ textAlign: "right", color: r.pct >= 50 ? "var(--accent)" : "var(--ink-2)" }}>
                     {r.pct}%

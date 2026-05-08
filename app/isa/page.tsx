@@ -11,7 +11,6 @@ import { StackedBarChart } from "@/components/Chart";
 import { TimeInStageBars } from "@/components/TimeInStageBars";
 import { Topbar } from "@/components/Topbar";
 import { TrendChartClient } from "@/components/TrendChartClient";
-import { Watchlist } from "@/components/Watchlist";
 import {
   getCriticalityBreakdown,
   getDailyInFlight,
@@ -20,7 +19,6 @@ import {
   getInfoClassBreakdown,
   getKindKpis,
   getMonthlyVolume,
-  getReassessmentForecast,
   getRiskBreakdown,
   getStatusBreakdown,
   getStatusRows,
@@ -53,7 +51,6 @@ export default async function IsaPage({
   const timeInStage = getTimeInStage("ISA");
   const wip = getWipMonthly("ISA", 12);
   const design = getDesignScoreStats();
-  const reassess = getReassessmentForecast(10);
 
   const list = listAssessments(
     {
@@ -156,10 +153,6 @@ export default async function IsaPage({
             </Card>
           ))}
         </div>
-
-        <Card title="Reassessments coming due" sub="ISAs with Next Assessment Date in the next 90 days." tight>
-          <Watchlist items={reassess} emptyMessage="Nothing due in the next 90 days." />
-        </Card>
 
         <SectionHead
           eyebrow="Records"

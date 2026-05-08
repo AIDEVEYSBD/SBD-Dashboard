@@ -14,7 +14,6 @@ import {
   getAgeBuckets,
   getOverdueWatchlist,
   getApproachingBreachWatchlist,
-  getReassessmentForecast,
   getStaleUnassigned,
   getDailyInFlight,
 } from "@/lib/queries";
@@ -27,7 +26,6 @@ export default function OverviewPage() {
   const ageAll = getAgeBuckets("ALL");
   const overdue = getOverdueWatchlist("ALL", 8);
   const approaching = getApproachingBreachWatchlist("ALL", 8);
-  const reassessments = getReassessmentForecast(8);
   const stale = getStaleUnassigned(6);
   const trend = getDailyInFlight("ALL", 30);
 
@@ -114,12 +112,10 @@ export default function OverviewPage() {
         </div>
 
         <div className="grid-2">
-          <Card title="Reassessments coming due" sub="ISAs with Next Assessment Date in the next 90 days." tight>
-            <Watchlist items={reassessments} emptyMessage="No reassessments in the next 90 days." />
-          </Card>
           <Card title="Stale & unassigned" sub="In-flight without a reviewer assigned." tight>
             <Watchlist items={stale} emptyMessage="Everything has a reviewer." />
           </Card>
+          <div />
         </div>
       </div>
     </>

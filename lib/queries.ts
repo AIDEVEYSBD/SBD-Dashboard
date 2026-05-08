@@ -128,11 +128,13 @@ export function getOverviewKpis(): KpiTile[] {
     all.filter((a) => a.dateSent <= endOfMonth(date) && !isClosedByMonth(a, date)).length,
   );
 
-  // 2) SLA compliance % across closed in trailing 30d
+  // 2) SLA compliance % across closed in trailing 30d.
+  // "Completed" = has a Cyber Approval Date (the reviewer-approved date).
+  // Date Finalized comes later as the formal record close — the gap between
+  // the two is the "Approval → finalize" lag KPI on the kind pages.
   const trailing30 = (a: Assessment) => {
-    const closed = a.cyberApprovalDate ?? a.dateFinalized;
-    if (!closed) return false;
-    return daysAgo(closed) <= 30;
+    if (!a.cyberApprovalDate) return false;
+    return daysAgo(a.cyberApprovalDate) <= 30;
   };
   const closed30 = all.filter(trailing30);
   const slaOk = closed30.filter((a) => a.hoursForSbdToReview <= SLA_HOURS[a.kind]);
@@ -140,22 +142,24 @@ export function getOverviewKpis(): KpiTile[] {
 
   // 6-month SLA% trend
   const slaTrend = lastNMonthKeys(8).map(({ date }) => {
-    const closedThisMonth = all.filter((a) => {
-      const c = a.cyberApprovalDate ?? a.dateFinalized;
-      return c && c >= startOfMonth(date) && c <= endOfMonth(date);
-    });
+    const closedThisMonth = all.filter((a) =>
+      a.cyberApprovalDate &&
+      a.cyberApprovalDate >= startOfMonth(date) &&
+      a.cyberApprovalDate <= endOfMonth(date),
+    );
     const ok = closedThisMonth.filter((a) => a.hoursForSbdToReview <= SLA_HOURS[a.kind]);
     return closedThisMonth.length > 0 ? Math.round((ok.length / closedThisMonth.length) * 100) : 0;
   });
 
-  // 3) Avg SBD hours (median is more honest)
+  // 3) Median SBD hours (mean for kind pages, median is the honest one)
   const recent = closed30;
   const medSbd = median(recent.map((a) => a.hoursForSbdToReview));
   const sbdTrend = lastNMonthKeys(8).map(({ date }) => {
-    const m = all.filter((a) => {
-      const c = a.cyberApprovalDate ?? a.dateFinalized;
-      return c && c >= startOfMonth(date) && c <= endOfMonth(date);
-    });
+    const m = all.filter((a) =>
+      a.cyberApprovalDate &&
+      a.cyberApprovalDate >= startOfMonth(date) &&
+      a.cyberApprovalDate <= endOfMonth(date),
+    );
     return Math.round(median(m.map((a) => a.hoursForSbdToReview)));
   });
 
@@ -239,10 +243,14 @@ function endOfMonth(d: Date): Date {
 }
 
 // "Was this assessment closed by the end of this month?"
+// Closure can be: cyber approval (completion), withdrawal, or rejection.
+// We don't carry a per-record rejection date, so for rejected status we fall
+// back to the assessment's own status flag.
 function isClosedByMonth(a: Assessment, monthDate: Date): boolean {
-  const c = a.cyberApprovalDate ?? a.dateFinalized ?? a.dateWithdrawn;
-  if (!c) return false;
-  return c <= endOfMonth(monthDate);
+  const end = endOfMonth(monthDate);
+  if (a.cyberApprovalDate && a.cyberApprovalDate <= end) return true;
+  if (a.dateWithdrawn && a.dateWithdrawn <= end) return true;
+  return false;
 }
 
 // ---------- KPI strip — kind-specific (ICAA / ISA pages) ----------
@@ -254,10 +262,7 @@ export function getKindKpis(kind: AssessmentKind): KpiTile[] {
 
   const inFlight = set.filter((a) => !isTerminal(kind, a.status));
   const overdue = inFlight.filter((a) => isOverdue(a.status));
-  const closed30 = set.filter((a) => {
-    const c = a.cyberApprovalDate ?? a.dateFinalized;
-    return c && daysAgo(c) <= 30;
-  });
+  const closed30 = set.filter((a) => a.cyberApprovalDate && daysAgo(a.cyberApprovalDate) <= 30);
   const slaOk = closed30.filter((a) => a.hoursForSbdToReview <= sla);
   const slaPct = closed30.length > 0 ? (slaOk.length / closed30.length) * 100 : 0;
   const medSbd = median(closed30.map((a) => a.hoursForSbdToReview));
@@ -285,18 +290,20 @@ export function getKindKpis(kind: AssessmentKind): KpiTile[] {
     set.filter((a) => a.dateSent <= endOfMonth(date) && !isClosedByMonth(a, date)).length,
   );
   const trendSla = lastNMonthKeys(8).map(({ date }) => {
-    const m = set.filter((a) => {
-      const c = a.cyberApprovalDate ?? a.dateFinalized;
-      return c && c >= startOfMonth(date) && c <= endOfMonth(date);
-    });
+    const m = set.filter((a) =>
+      a.cyberApprovalDate &&
+      a.cyberApprovalDate >= startOfMonth(date) &&
+      a.cyberApprovalDate <= endOfMonth(date),
+    );
     const ok = m.filter((a) => a.hoursForSbdToReview <= sla);
     return m.length > 0 ? Math.round((ok.length / m.length) * 100) : 0;
   });
   const trendMed = lastNMonthKeys(8).map(({ date }) => {
-    const m = set.filter((a) => {
-      const c = a.cyberApprovalDate ?? a.dateFinalized;
-      return c && c >= startOfMonth(date) && c <= endOfMonth(date);
-    });
+    const m = set.filter((a) =>
+      a.cyberApprovalDate &&
+      a.cyberApprovalDate >= startOfMonth(date) &&
+      a.cyberApprovalDate <= endOfMonth(date),
+    );
     return Math.round(median(m.map((a) => a.hoursForSbdToReview)));
   });
   const trendOverdue = lastNMonthKeys(8).map(({ date }) =>
@@ -437,9 +444,12 @@ export function getMonthlyVolume(kind: AssessmentKind | "ALL", months = 12): Mon
     let sent = 0, completed = 0, rejected = 0, withdrawn = 0;
     for (const a of set) {
       if (a.dateSent >= s && a.dateSent <= e) sent++;
-      if (a.dateFinalized && baseStatus(a.status) === "Completed" && a.dateFinalized >= s && a.dateFinalized <= e) completed++;
-      if (baseStatus(a.status).startsWith("Rejected") && a.dateFinalized && a.dateFinalized >= s && a.dateFinalized <= e) rejected++;
-      if (a.dateWithdrawn && a.dateWithdrawn >= s && a.dateWithdrawn <= e) withdrawn++;
+      // Completed: status is "Completed" AND we have a Cyber Approval Date in this month.
+      if (baseStatus(a.status) === "Completed" && a.cyberApprovalDate && a.cyberApprovalDate >= s && a.cyberApprovalDate <= e) completed++;
+      // Rejected: status starts with "Rejected" and the rejection month matches this bucket.
+      if (baseStatus(a.status).startsWith("Rejected") && a.monthRejected === key) rejected++;
+      // Withdrawn: status starts with "Withdrawn" and dateWithdrawn falls in this month.
+      if (baseStatus(a.status).startsWith("Withdrawn") && a.dateWithdrawn && a.dateWithdrawn >= s && a.dateWithdrawn <= e) withdrawn++;
     }
     return { month: key, label, sent, completed, rejected, withdrawn };
   });
@@ -531,97 +541,84 @@ export function getStaleUnassigned(limit = 10): WatchlistItem[] {
     .map((a) => toWatchlist(a, `${Math.round(a.daysUnassigned)}d unassigned`));
 }
 
-export function getReassessmentForecast(limit = 10): WatchlistItem[] {
-  const { isa } = getDataset();
-  const horizon = new Date(NOW.getTime() + 90 * DAY);
-  return isa
-    .filter((a) => a.nextAssessmentDate && a.nextAssessmentDate >= NOW && a.nextAssessmentDate <= horizon)
-    .sort((a, b) => (a.nextAssessmentDate!.getTime() - b.nextAssessmentDate!.getTime()))
-    .slice(0, limit)
-    .map((a) => toWatchlist(a, `due ${formatRelativeDays(a.nextAssessmentDate!)}`));
-}
-
-function formatRelativeDays(d: Date): string {
-  const days = Math.round((d.getTime() - NOW.getTime()) / DAY);
-  if (days <= 0) return "today";
-  if (days === 1) return "tomorrow";
-  return `in ${days}d`;
-}
-
 // ---------- Conversion (ICAA → ISA) ----------
 
 export interface ConversionStats {
   totalIcaa: number;
-  finalizedIcaa: number;
+  completedIcaa: number;
   convertedIcaa: number;
   conversionPct: number;
-  monthly: { month: string; label: string; finalized: number; converted: number; pct: number }[];
+  monthly: { month: string; label: string; completed: number; converted: number; pct: number }[];
   funnel: FunnelStep[];
   conversionLagDaysMedian: number;
-  byRiskCat: { cat: string; finalized: number; converted: number; pct: number }[];
+  byRiskCat: { cat: string; completed: number; converted: number; pct: number }[];
 }
 
 export function getConversionStats(): ConversionStats {
   const { icaa, isa } = getDataset();
 
-  const finalized = icaa.filter((a) => a.dateFinalized);
-  const converted = finalized.filter((a) => a.isaIdLink);
+  // "Completed" = status === "Completed" (the source-system flag is authoritative).
+  const completed = icaa.filter((a) => baseStatus(a.status) === "Completed");
+  const converted = completed.filter((a) => a.isaIdLink);
 
   const monthly = lastNMonthKeys(10).map(({ key, label, date }) => {
     const s = startOfMonth(date), e = endOfMonth(date);
-    const finM = finalized.filter((a) => a.dateFinalized! >= s && a.dateFinalized! <= e);
+    const finM = completed.filter((a) => a.cyberApprovalDate && a.cyberApprovalDate >= s && a.cyberApprovalDate <= e);
     const convM = finM.filter((a) => a.isaIdLink);
     return {
       month: key,
       label,
-      finalized: finM.length,
+      completed: finM.length,
       converted: convM.length,
       pct: finM.length > 0 ? Math.round((convM.length / finM.length) * 100) : 0,
     };
   });
 
-  // Funnel — across all ICAA
+  // Funnel — uses real ICAA status milestones, not invented stages.
   const sent = icaa.length;
-  const started = icaa.filter((a) => !baseStatus(a.status).startsWith("Not started")).length;
+  const inProgressOrLater = icaa.filter((a) => !baseStatus(a.status).startsWith("Not started")).length;
   const submitted = icaa.filter((a) =>
     !baseStatus(a.status).startsWith("Not started") &&
     !baseStatus(a.status).startsWith("Ready to Submit") &&
     !baseStatus(a.status).startsWith("In-progress with requestor"),
   ).length;
-  const inReview = icaa.filter((a) => baseStatus(a.status).startsWith("Security Validation") || baseStatus(a.status) === "Completed" || baseStatus(a.status).startsWith("Rejected")).length;
-  const cyberApproved = icaa.filter((a) => a.cyberApprovalDate).length;
-  const finalizedCount = finalized.length;
+  const inSecurityReview = icaa.filter((a) =>
+    baseStatus(a.status).startsWith("Security Validation") ||
+    baseStatus(a.status) === "Completed" ||
+    baseStatus(a.status).startsWith("Rejected") ||
+    baseStatus(a.status) === "ICAA Archived",
+  ).length;
+  const completedCount = completed.length;
   const convertedCount = converted.length;
 
   const funnel: FunnelStep[] = [
     { label: "ICAA Sent", value: sent },
-    { label: "Started", value: started },
-    { label: "Submitted", value: submitted },
-    { label: "In Review", value: inReview },
-    { label: "Cyber Approved", value: cyberApproved },
-    { label: "Finalized", value: finalizedCount },
+    { label: "Requester engaged", value: inProgressOrLater },
+    { label: "Submitted to security", value: submitted },
+    { label: "In Security Validation", value: inSecurityReview },
+    { label: "Completed", value: completedCount },
     { label: "→ Converted to ISA", value: convertedCount },
   ];
 
-  // Conversion lag
+  // Conversion lag — days between ICAA completion (cyber approval) and ISA send.
   const isaByParent = new Map(isa.filter((x) => x.parentIcaaId).map((x) => [x.parentIcaaId!, x] as const));
   const lags: number[] = [];
   for (const a of converted) {
     const child = isaByParent.get(a.id);
     if (!child) continue;
-    if (a.dateFinalized && child.dateSent) {
-      lags.push(Math.max(0, (child.dateSent.getTime() - a.dateFinalized.getTime()) / DAY));
+    if (a.cyberApprovalDate && child.dateSent) {
+      lags.push(Math.max(0, (child.dateSent.getTime() - a.cyberApprovalDate.getTime()) / DAY));
     }
   }
   const lagMedian = median(lags);
 
   const cats = ["Low", "Medium", "High", "Critical"] as const;
   const byRiskCat = cats.map((cat) => {
-    const finCat = finalized.filter((a) => a.inherentRiskCategorization === cat);
+    const finCat = completed.filter((a) => a.inherentRiskCategorization === cat);
     const convCat = finCat.filter((a) => a.isaIdLink);
     return {
       cat,
-      finalized: finCat.length,
+      completed: finCat.length,
       converted: convCat.length,
       pct: finCat.length > 0 ? Math.round((convCat.length / finCat.length) * 100) : 0,
     };
@@ -629,9 +626,9 @@ export function getConversionStats(): ConversionStats {
 
   return {
     totalIcaa: icaa.length,
-    finalizedIcaa: finalized.length,
+    completedIcaa: completed.length,
     convertedIcaa: converted.length,
-    conversionPct: finalized.length > 0 ? (converted.length / finalized.length) * 100 : 0,
+    conversionPct: completed.length > 0 ? (converted.length / completed.length) * 100 : 0,
     monthly,
     funnel,
     conversionLagDaysMedian: lagMedian,
@@ -641,29 +638,37 @@ export function getConversionStats(): ConversionStats {
 
 // ---------- People / org ----------
 
+// Derive reviewers from the actual dataset, not a static roster — so imported
+// Excel exports surface every code that's actually present in the data. The
+// static PEOPLE list (from lib/people.ts) is now used only as a friendly-name
+// lookup; unknown codes still appear, just with their code as the name.
 export function getReviewerLoads(): ReviewerLoad[] {
   const { icaa, isa, people } = getDataset();
   const all: Assessment[] = [...icaa, ...isa];
+  const lookup = new Map(people.map((p) => [p.code, p]));
 
-  return people.map((p) => {
-    const mine = all.filter((a) => a.reviewer === p.code);
+  const codes = new Set<string>();
+  for (const a of all) {
+    if (a.reviewer) codes.add(a.reviewer);
+  }
+
+  return [...codes].map((code) => {
+    const mine = all.filter((a) => a.reviewer === code);
     const active = mine.filter((a) => !isTerminal(a.kind, a.status)).length;
-    const closed30 = mine.filter((a) => {
-      const c = a.cyberApprovalDate ?? a.dateFinalized;
-      return c && daysAgo(c) <= 30;
-    });
+    const closed30 = mine.filter((a) => a.cyberApprovalDate && daysAgo(a.cyberApprovalDate) <= 30);
     const slaOk = closed30.filter((a) => a.hoursForSbdToReview <= SLA_HOURS[a.kind]).length;
     const avgHours = closed30.length > 0
       ? closed30.reduce((s, a) => s + a.hoursForSbdToReview, 0) / closed30.length
       : 0;
 
-    // Nominal capacity: 8 active assessments per analyst
+    // Nominal capacity: 8 active assessments per analyst.
     const load = Math.min(100, Math.round((active / 8) * 100));
 
+    const meta = lookup.get(code);
     return {
-      code: p.code,
-      name: p.name,
-      role: p.role,
+      code,
+      name: meta?.name ?? code,
+      role: meta?.role ?? "Reviewer",
       active,
       closed30d: closed30.length,
       avgSbdHours: avgHours,
@@ -796,16 +801,16 @@ export interface DesignScoreStats {
 
 export function getDesignScoreStats(): DesignScoreStats {
   const { isa } = getDataset();
-  const finalized = isa.filter((a) => a.dateFinalized);
-  if (finalized.length === 0) {
+  const completed = isa.filter((a) => baseStatus(a.status) === "Completed");
+  if (completed.length === 0) {
     return { avgInitial: 0, avgCurrent: 0, avgImprovement: 0, byLevel: [] };
   }
   const avg = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
-  const avgInitial = avg(finalized.map((a) => a.initialDesignScore));
-  const avgCurrent = avg(finalized.map((a) => a.currentDesignScore));
+  const avgInitial = avg(completed.map((a) => a.initialDesignScore));
+  const avgCurrent = avg(completed.map((a) => a.currentDesignScore));
   const levels = ["L1", "L2", "L3"];
   const byLevel = levels.map((level) => {
-    const sub = finalized.filter((a) => a.isaLevel === level);
+    const sub = completed.filter((a) => a.isaLevel === level);
     return {
       level,
       initial: sub.length > 0 ? avg(sub.map((a) => a.initialDesignScore)) : 0,
@@ -864,8 +869,10 @@ export function getDailyInFlight(kind: AssessmentKind | "ALL", days = 30): Month
     const day = new Date(NOW.getTime() - i * DAY);
     const cnt = set.filter((a) => {
       if (a.dateSent > day) return false;
-      const c = a.cyberApprovalDate ?? a.dateFinalized ?? a.dateWithdrawn;
-      return !c || c >= day;
+      // In flight = no closure (cyber approval or withdrawal) on or before this day.
+      if (a.cyberApprovalDate && a.cyberApprovalDate <= day) return false;
+      if (a.dateWithdrawn && a.dateWithdrawn <= day) return false;
+      return true;
     }).length;
     out.push({
       month: day.toISOString().slice(0, 10),
@@ -889,7 +896,8 @@ export interface TimeInStageRow {
 export function getTimeInStage(kind: AssessmentKind): TimeInStageRow[] {
   const { icaa, isa } = getDataset();
   const set = kind === "ICAA" ? icaa : isa;
-  const closed = set.filter((a) => a.dateFinalized);
+  // Only fully completed records have meaningful time-in-stage values.
+  const closed = set.filter((a) => baseStatus(a.status) === "Completed");
   if (closed.length === 0) return [];
   const avg = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
   return [
@@ -933,7 +941,8 @@ export function listAssessments(filters: ListFilters, page = 1, pageSize = 25): 
     return true;
   });
 
-  // Sort: in-flight first by overdue/oldest; terminal records by most recent finalize.
+  // Sort: in-flight first (overdue, then oldest); terminal records by most
+  // recent cyber-approval (or fallback to dateSent if not approved).
   filtered.sort((a, b) => {
     const aDone = isTerminal(a.kind, a.status), bDone = isTerminal(b.kind, b.status);
     if (aDone !== bDone) return aDone ? 1 : -1;
@@ -943,7 +952,9 @@ export function listAssessments(filters: ListFilters, page = 1, pageSize = 25): 
       if (aO !== bO) return bO - aO;
       return a.dateSent.getTime() - b.dateSent.getTime();
     }
-    return (b.dateFinalized?.getTime() ?? 0) - (a.dateFinalized?.getTime() ?? 0);
+    const aT = a.cyberApprovalDate?.getTime() ?? a.dateSent.getTime();
+    const bT = b.cyberApprovalDate?.getTime() ?? b.dateSent.getTime();
+    return bT - aT;
   });
 
   const start = (page - 1) * pageSize;
