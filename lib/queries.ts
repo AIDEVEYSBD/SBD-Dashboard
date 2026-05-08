@@ -587,6 +587,15 @@ export interface ConversionStats {
   byRiskCat: { cat: string; completed: number; converted: number; pct: number }[];
 }
 
+// Status fragments that mean "the ISA is at or past cyber approval" — matched
+// case-insensitively as substrings of the ISA status. Picks up overdue twins
+// and minor formatting variations in the source system.
+const ISA_CONVERTED_FRAGMENTS = [
+  "completed",
+  "pending cyber manager approval",
+  "pending service owner approval",
+];
+
 export function getConversionStats(): ConversionStats {
   const { icaa, isa } = getDataset();
 
@@ -595,17 +604,19 @@ export function getConversionStats(): ConversionStats {
   // Approval (incl. Overdue) — i.e. isCompletedLike("ICAA", status).
   const completed = icaa.filter((a) => isCompletedLike("ICAA", a.status));
 
-  // "Converted" = we have a verified linked ISA record in the imported data.
-  // The link comes from one of:
-  //   1. isaIdLink (extracted from "ISA Status Text Feild" or seed's
-  //      Parent ICAA ID linkage), AND the ISA exists in the dataset
-  //   2. seed-style Parent ICAA ID match
-  // We require an actual matching ISA so we don't mistakenly count records
-  // whose "ISA Status" is populated but the corresponding ISA isn't loaded.
-  const isaIds = new Set(isa.map((x) => x.isaId));
-  const isaParents = new Set(isa.map((x) => x.parentIcaaId).filter(Boolean) as string[]);
-  const isConverted = (a: IcaaAssessment) =>
-    (a.isaIdLink !== null && isaIds.has(a.isaIdLink)) || isaParents.has(a.id);
+  // Conversion rule (per user):
+  //   ICAA.id === ISA.id  AND  (ISA has Cyber Approval Date  OR  ISA status
+  //   contains one of {completed, pending cyber manager approval, pending
+  //   service owner approval} — case-insensitive substring match, so the
+  //   Overdue twins match automatically)
+  const isaById = new Map<string, IsaAssessment>(isa.map((x) => [x.id, x]));
+  const isConverted = (a: IcaaAssessment): boolean => {
+    const linked = isaById.get(a.id);
+    if (!linked) return false;
+    if (linked.cyberApprovalDate) return true;
+    const status = (linked.status ?? "").toLowerCase();
+    return ISA_CONVERTED_FRAGMENTS.some((frag) => status.includes(frag));
+  };
   const converted = completed.filter(isConverted);
 
   const monthly = lastNMonthKeys(10).map(({ key, label, date }) => {
@@ -648,12 +659,10 @@ export function getConversionStats(): ConversionStats {
   ];
 
   // Conversion lag — days between ICAA completion (cyber approval) and ISA send.
-  // Look up the ISA by isaIdLink first (preferred), fall back to Parent ICAA ID.
-  const isaById = new Map(isa.map((x) => [x.isaId, x] as const));
-  const isaByParent = new Map(isa.filter((x) => x.parentIcaaId).map((x) => [x.parentIcaaId!, x] as const));
+  // The link is ICAA.id === ISA.id, same as the conversion rule above.
   const lags: number[] = [];
   for (const a of converted) {
-    const child = (a.isaIdLink && isaById.get(a.isaIdLink)) ?? isaByParent.get(a.id);
+    const child = isaById.get(a.id);
     if (!child) continue;
     if (a.cyberApprovalDate && child.dateSent) {
       lags.push(Math.max(0, (child.dateSent.getTime() - a.cyberApprovalDate.getTime()) / DAY));
