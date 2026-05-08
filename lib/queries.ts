@@ -84,6 +84,8 @@ function dirFromDelta(n: number, isLowerBetter = false): "up" | "down" | "flat" 
 
 // ---------- Dataset summary (for the Import page) ----------
 
+import { existsSync, statSync } from "node:fs";
+
 export interface DatasetSummary {
   icaaTotal: number;
   isaTotal: number;
@@ -98,13 +100,7 @@ export function getDatasetSummary(): DatasetSummary {
   const { icaa, isa } = getDataset();
   let lastModified: Date | null = null;
   try {
-    // statSync via fs is server-side only; safe inside server components.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("node:fs") as typeof import("node:fs");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require("node:path") as typeof import("node:path");
-    const p = path.resolve(process.cwd(), "data", "assessments.json");
-    if (fs.existsSync(p)) lastModified = fs.statSync(p).mtime;
+    if (existsSync(JSON_PATH)) lastModified = statSync(JSON_PATH).mtime;
   } catch {
     // ignore
   }

@@ -920,6 +920,116 @@ button { font: inherit; }
   transform: translateY(-1px);
 }
 
+/* ---------- Import — upload zone ---------- */
+.upload-zone {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  padding: 18px 18px;
+  cursor: pointer;
+  background: var(--surface-tint);
+  transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+  min-height: 90px;
+}
+.upload-zone:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.upload-zone.has-file {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.upload-zone-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.upload-zone-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.upload-zone-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.upload-zone-sub {
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-zone.has-file .upload-zone-sub {
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+}
+.upload-zone-clear {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.upload-zone-clear:hover { color: var(--bad); }
+
+/* ---------- Import — result tiles ---------- */
+.import-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.import-stat-value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.import-stat-value.tone-ok { color: var(--ok); }
+.import-stat-value.tone-warn { color: var(--warn); }
+.import-stat-value.tone-bad { color: var(--bad); }
+.import-stat-value.tone-muted { color: var(--ink-3); }
+.import-stat-value.tone-default { color: var(--ink); }
+
+/* ---------- Import — currently-loaded summary ---------- */
+.import-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.import-summary-total {
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--ink);
+}
+.import-summary-split {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 /* ============================================================
    Animations — instant initial paint, staggered fade-up content
    ============================================================ */

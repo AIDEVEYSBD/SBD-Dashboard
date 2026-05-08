@@ -164,7 +164,15 @@ export function getDataset(): Dataset {
 
   if (cached && cached.mtime === mtime) return cached.dataset;
 
-  const raw = JSON.parse(readFileSync(JSON_PATH, "utf8")) as RawDataset;
+  // Tolerate empty / malformed JSON (e.g. file just created by `touch`, or a
+  // partial write mid-import). Treat as "no data yet" and continue.
+  let raw: RawDataset = { icaa: [], isa: [] };
+  try {
+    const text = readFileSync(JSON_PATH, "utf8").trim();
+    if (text.length > 0) raw = JSON.parse(text) as RawDataset;
+  } catch {
+    raw = { icaa: [], isa: [] };
+  }
   const icaa = (raw.icaa ?? []).map(mapIcaa);
   const isa = (raw.isa ?? []).map(mapIsa);
 
