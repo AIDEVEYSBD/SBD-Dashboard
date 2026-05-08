@@ -1045,6 +1045,84 @@ button { font: inherit; }
 .import-stat-value.tone-muted { color: var(--ink-3); }
 .import-stat-value.tone-default { color: var(--ink); }
 
+/* ---------- Onboarding modal ---------- */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 9, 28, 0.55);
+  backdrop-filter: blur(4px);
+  padding: var(--s-5);
+  animation: fade-in var(--motion-base) var(--ease-out) both;
+}
+.onboarding-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 20px 60px rgba(7, 9, 28, 0.35);
+  padding: var(--s-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .onboarding-card { animation: fade-up var(--motion-slow) var(--ease-out) both; }
+}
+.onboarding-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 4px 0 0;
+}
+.onboarding-title em {
+  font-style: normal;
+  color: var(--accent);
+  font-weight: 600;
+}
+.onboarding-sub {
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.5;
+  margin: 0 0 var(--s-3);
+}
+.onboarding-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.onboarding-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.onboarding-field input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+}
+.onboarding-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface-solid);
+}
+.onboarding-actions {
+  margin-top: var(--s-3);
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* ---------- Import — currently-loaded summary ---------- */
 .import-summary {
   display: flex;

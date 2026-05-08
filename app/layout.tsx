@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { Onboarding } from "@/components/Onboarding";
 import { Sidebar } from "@/components/Sidebar";
 import { TweaksPanel } from "@/components/TweaksPanel";
 import { TweaksProvider } from "@/components/TweaksContext";
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <main className="main">{children}</main>
           </div>
           <TweaksPanel />
+          <Onboarding />
         </TweaksProvider>
       </body>
     </html>

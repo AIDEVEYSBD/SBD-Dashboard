@@ -1,4 +1,5 @@
 import { Card } from "@/components/Card";
+import { ConversionByRiskTable } from "@/components/ConversionByRiskTable";
 import { Funnel } from "@/components/Funnel";
 import { Ring } from "@/components/Ring";
 import { SectionHead } from "@/components/SectionHead";
@@ -79,29 +80,8 @@ export default function ConversionPage() {
           </Card>
         </div>
 
-        <Card title="Conversion by inherent risk" sub="Higher-risk ICAAs should convert more often. Sanity check the triage rule.">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Risk category</th>
-                <th style={{ textAlign: "right" }}>Completed</th>
-                <th style={{ textAlign: "right" }}>Converted</th>
-                <th style={{ textAlign: "right" }}>Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.byRiskCat.map((r) => (
-                <tr key={r.cat}>
-                  <td>{r.cat}</td>
-                  <td className="num" style={{ textAlign: "right" }}>{r.completed.toLocaleString()}</td>
-                  <td className="num" style={{ textAlign: "right" }}>{r.converted.toLocaleString()}</td>
-                  <td className="num" style={{ textAlign: "right", color: r.pct >= 50 ? "var(--accent)" : "var(--ink-2)" }}>
-                    {r.pct}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <Card title="Conversion by inherent risk" sub="Higher-risk ICAAs should convert more often. Sanity check the triage rule." tight>
+          <ConversionByRiskTable rows={stats.byRiskCat} />
         </Card>
       </div>
     </>

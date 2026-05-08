@@ -43,15 +43,30 @@ const HEADLINES: Record<Slot, string> = {
   late: "Working late",
 };
 
+// First-name only — keeps the greeting feeling personal. "Mira Reyes" → "Mira".
+function firstName(full: string | null | undefined): string {
+  if (!full) return "";
+  return full.trim().split(/\s+/)[0] ?? "";
+}
+
 export function GreetingHeadline() {
   const [slot, setSlot] = useState<Slot | null>(null);
-  useEffect(() => setSlot(slotFor(new Date().getHours())), []);
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    setSlot(slotFor(new Date().getHours()));
+    fetch("/api/config", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((c: { name?: string }) => setName(c.name ?? null))
+      .catch(() => setName(null));
+  }, []);
+
   if (!slot) {
     return <>Welcome <em>back</em></>;
   }
+  const subject = firstName(name) || "team";
   return (
     <>
-      {HEADLINES[slot]}, <em>team</em>
+      {HEADLINES[slot]}, <em>{subject}</em>
     </>
   );
 }
