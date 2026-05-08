@@ -5,6 +5,7 @@
 import { NOW } from "./clock";
 import {
   baseStatus,
+  isCompletedLike,
   isOverdue,
   isInProgress,
   isRejected,
