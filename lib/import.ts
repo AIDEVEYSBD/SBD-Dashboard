@@ -424,7 +424,7 @@ function emptyStats(): KindStats {
   return { added: 0, updated: 0, skippedExisting: 0, skippedInvalid: 0 };
 }
 
-function mergeRecords<T extends Record<string, unknown>>(
+function mergeRecords<T>(
   existing: T[],
   incoming: T[],
   idField: keyof T,
@@ -488,10 +488,10 @@ export async function runImport(
         warnings.push(`"${sheet.name}" missing required columns: ${result.missingRequired.join(", ")}`);
       }
       if (result.kind === "ICAA") {
-        incoming.icaa.push(...(result.rows as RawIcaa[]));
+        incoming.icaa.push(...(result.rows as unknown as RawIcaa[]));
         invalidIcaa += result.skipped.length;
       } else {
-        incoming.isa.push(...(result.rows as RawIsa[]));
+        incoming.isa.push(...(result.rows as unknown as RawIsa[]));
         invalidIsa += result.skipped.length;
       }
     }
@@ -499,8 +499,18 @@ export async function runImport(
 
   const existing = readRawDataset();
 
-  const icaaMerge = mergeRecords<RawIcaa>(existing.icaa ?? [], incoming.icaa, "ID", !!opts.skipExisting);
-  const isaMerge = mergeRecords<RawIsa>(existing.isa ?? [], incoming.isa, "ID", !!opts.skipExisting);
+  const icaaMerge = mergeRecords(
+    existing.icaa ?? [],
+    incoming.icaa,
+    "ID" as keyof RawIcaa,
+    !!opts.skipExisting,
+  );
+  const isaMerge = mergeRecords(
+    existing.isa ?? [],
+    incoming.isa,
+    "ID" as keyof RawIsa,
+    !!opts.skipExisting,
+  );
 
   icaaMerge.stats.skippedInvalid = invalidIcaa;
   isaMerge.stats.skippedInvalid = invalidIsa;

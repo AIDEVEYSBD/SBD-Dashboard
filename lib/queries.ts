@@ -85,6 +85,7 @@ function dirFromDelta(n: number, isLowerBetter = false): "up" | "down" | "flat" 
 // ---------- Dataset summary (for the Import page) ----------
 
 import { existsSync, statSync } from "node:fs";
+import { JSON_PATH } from "./data";
 
 export interface DatasetSummary {
   icaaTotal: number;
