@@ -11,7 +11,9 @@ export function StatusTable({ rows }: { rows: StatusRow[] }) {
     {
       key: "status",
       label: "Status",
+      filterable: true,
       sortValue: (r) => r.status,
+      filterValue: (r) => r.status,
       render: (r) => (
         <>
           {r.status}

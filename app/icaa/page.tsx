@@ -11,6 +11,7 @@ import { StackedBarChart } from "@/components/Chart";
 import { TimeInStageBars } from "@/components/TimeInStageBars";
 import { Topbar } from "@/components/Topbar";
 import { TrendChartClient } from "@/components/TrendChartClient";
+import { WithdrawnNote } from "@/components/WithdrawnNote";
 import {
   getAiStats,
   getCriticalityBreakdown,
@@ -25,13 +26,24 @@ import {
   getStatusRows,
   getTimeInStage,
   getWipMonthly,
+  getWithdrawnStats,
   listAssessments,
 } from "@/lib/queries";
 
 export default async function IcaaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; risk?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    risk?: string;
+    q?: string;
+    page?: string;
+    sortKey?: string;
+    sortDir?: string;
+    statusIn?: string;
+    reviewerIn?: string;
+    riskIn?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const view = sp.view ?? "in-flight";
@@ -39,6 +51,11 @@ export default async function IcaaPage({
   const q = sp.q ?? "";
   const page = Math.max(1, Number(sp.page) || 1);
   const pageSize = 25;
+  const sortKey = sp.sortKey;
+  const sortDir = sp.sortDir === "asc" ? "asc" : sp.sortDir === "desc" ? "desc" : undefined;
+  const statusIn = sp.statusIn ? sp.statusIn.split(",").filter(Boolean) : undefined;
+  const reviewerIn = sp.reviewerIn ? sp.reviewerIn.split(",").filter(Boolean) : undefined;
+  const riskIn = sp.riskIn ? sp.riskIn.split(",").filter(Boolean) : undefined;
 
   const kpis = getKindKpis("ICAA");
   const trend = getDailyInFlight("ICAA", 30);
@@ -52,6 +69,7 @@ export default async function IcaaPage({
   const geo = getGeographyBreakdown();
   const timeInStage = getTimeInStage("ICAA");
   const wip = getWipMonthly("ICAA", 12);
+  const withdrawn = getWithdrawnStats("ICAA");
   const ai = getAiStats();
 
   const list = listAssessments(
@@ -61,6 +79,11 @@ export default async function IcaaPage({
       inFlightOnly: view !== "any",
       riskCat: risk === "Any" ? undefined : risk,
       search: q || undefined,
+      sortKey,
+      sortDir,
+      statusIn,
+      reviewerIn,
+      riskCatIn: riskIn,
     },
     page,
     pageSize,
@@ -77,6 +100,8 @@ export default async function IcaaPage({
         />
 
         <KpiStripClient tiles={kpis} />
+
+        <WithdrawnNote stats={withdrawn} kind="ICAA" />
 
         <div className="grid-2-1">
           <Card title="In-flight ICAAs — last 30 days" sub="Daily count.">

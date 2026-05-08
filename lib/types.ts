@@ -152,10 +152,11 @@ export interface AgeBucket {
 export interface WatchlistItem {
   id: string;
   application: string;
-  reviewer: string | null;
+  reviewer: string | null;        // reviewer code, e.g. "MR"
+  reviewerName: string | null;    // full name where known, e.g. "Mira Reyes"; null if unassigned
   status: string;
   pillVariant: PillVariant;
-  meta: string;           // free-form right-side text (e.g. "+3d overdue")
+  meta: string;                   // free-form right-side text (e.g. "+3d overdue")
   href?: string;
 }
 

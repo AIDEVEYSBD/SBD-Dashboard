@@ -1,7 +1,6 @@
 "use client";
 
 import type { OrgRow, ReviewerLoad } from "@/lib/types";
-import { Avatar } from "./Avatar";
 import { Pill } from "./Pill";
 import { Progress } from "./Progress";
 import { SortableTable, type SortableColumn } from "./SortableTable";
@@ -13,16 +12,18 @@ export function ReviewerTable({ rows }: { rows: ReviewerLoad[] }) {
       label: "Reviewer",
       sortValue: (r) => r.name,
       render: (r) => (
-        <span className="who">
-          <Avatar code={r.code} title={r.name} />
+        <span>
           <span style={{ fontWeight: 500 }}>{r.name}</span>
+          <span className="muted mono" style={{ fontSize: 11, marginLeft: 8 }}>{r.code}</span>
         </span>
       ),
     },
     {
       key: "role",
       label: "Role",
+      filterable: true,
       sortValue: (r) => r.role,
+      filterValue: (r) => r.role,
       render: (r) => <span className="muted">{r.role}</span>,
     },
     {
@@ -83,7 +84,7 @@ export function ReviewerTable({ rows }: { rows: ReviewerLoad[] }) {
 
 export function OrgTable({ rows }: { rows: OrgRow[] }) {
   const columns: SortableColumn<OrgRow>[] = [
-    { key: "org", label: "Org", sortValue: (o) => o.org },
+    { key: "org", label: "Org", sortValue: (o) => o.org, filterable: true, filterValue: (o) => o.org },
     {
       key: "total",
       label: "Total",

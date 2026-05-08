@@ -7,6 +7,7 @@ import { TrendChartClient } from "@/components/TrendChartClient";
 import { Topbar } from "@/components/Topbar";
 import { Watchlist } from "@/components/Watchlist";
 import { StackedBarChart } from "@/components/Chart";
+import { WithdrawnNote } from "@/components/WithdrawnNote";
 import {
   getOverviewKpis,
   getStatusBreakdown,
@@ -16,6 +17,7 @@ import {
   getApproachingBreachWatchlist,
   getStaleUnassigned,
   getDailyInFlight,
+  getWithdrawnStats,
 } from "@/lib/queries";
 
 export default function OverviewPage() {
@@ -28,6 +30,7 @@ export default function OverviewPage() {
   const approaching = getApproachingBreachWatchlist("ALL", 8);
   const stale = getStaleUnassigned(6);
   const trend = getDailyInFlight("ALL", 30);
+  const withdrawn = getWithdrawnStats("ALL");
 
   const ageMax = Math.max(1, ...ageAll.map((b) => b.count));
 
@@ -42,6 +45,8 @@ export default function OverviewPage() {
         />
 
         <KpiStripClient tiles={kpis} />
+
+        <WithdrawnNote stats={withdrawn} kind="ALL" />
 
         <div className="grid-2-1">
           <Card title="In-flight assessments — last 30 days" sub="Daily count across ICAA and ISA combined.">

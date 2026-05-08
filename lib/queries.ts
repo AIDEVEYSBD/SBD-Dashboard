@@ -6,12 +6,12 @@ import { NOW } from "./clock";
 import {
   baseStatus,
   isOverdue,
+  isInProgress,
+  isRejected,
   isTerminal,
-  lifecycleBucket,
+  isWithdrawn,
   pillVariantFor,
   shortStatus,
-  type LifecycleBucket,
-  BUCKET_COLOR,
 } from "./statuses";
 import type {
   AgeBucket,
@@ -108,8 +108,8 @@ export function getDatasetSummary(): DatasetSummary {
   return {
     icaaTotal: icaa.length,
     isaTotal: isa.length,
-    icaaInFlight: icaa.filter((a) => !isTerminal("ICAA", a.status)).length,
-    isaInFlight: isa.filter((a) => !isTerminal("ISA", a.status)).length,
+    icaaInFlight: icaa.filter((a) => isInProgress("ICAA", a.status)).length,
+    isaInFlight: isa.filter((a) => isInProgress("ISA", a.status)).length,
     icaaCompleted: icaa.filter((a) => baseStatus(a.status) === "Completed").length,
     isaCompleted: isa.filter((a) => baseStatus(a.status) === "Completed").length,
     lastModified,
@@ -123,7 +123,7 @@ export function getOverviewKpis(): KpiTile[] {
   const all = [...icaa, ...isa];
 
   // 1) Total in flight
-  const inFlight = all.filter((a) => !isTerminal(a.kind, a.status));
+  const inFlight = all.filter((a) => isInProgress(a.kind, a.status));
   const inFlightLast: number[] = lastNMonthKeys(10).map(({ date }) =>
     all.filter((a) => a.dateSent <= endOfMonth(date) && !isClosedByMonth(a, date)).length,
   );
@@ -164,7 +164,7 @@ export function getOverviewKpis(): KpiTile[] {
   });
 
   // 4) Currently overdue
-  const overdueCount = all.filter((a) => !isTerminal(a.kind, a.status) && isOverdue(a.status)).length;
+  const overdueCount = all.filter((a) => isInProgress(a.kind, a.status) && isOverdue(a.status)).length;
   const overdueTrend = lastNMonthKeys(8).map(({ date }) => {
     return all.filter((a) =>
       a.dateSent <= endOfMonth(date) &&
@@ -260,7 +260,7 @@ export function getKindKpis(kind: AssessmentKind): KpiTile[] {
   const set = kind === "ICAA" ? icaa : isa;
   const sla = SLA_HOURS[kind];
 
-  const inFlight = set.filter((a) => !isTerminal(kind, a.status));
+  const inFlight = set.filter((a) => isInProgress(kind, a.status));
   const overdue = inFlight.filter((a) => isOverdue(a.status));
   const closed30 = set.filter((a) => a.cyberApprovalDate && daysAgo(a.cyberApprovalDate) <= 30);
   const slaOk = closed30.filter((a) => a.hoursForSbdToReview <= sla);
@@ -361,30 +361,35 @@ export function getKindKpis(kind: AssessmentKind): KpiTile[] {
   ];
 }
 
-// ---------- Status breakdown ----------
+// ---------- Status breakdown — high-level lifecycle groupings ----------
+//
+// Four buckets that match the user's mental model:
+//   In-progress   = isInProgress (not done, not withdrawn, not rejected)
+//   Completed     = isCompletedLike (completed + archived + pending approvals)
+//   Rejected     = isRejected
+//   Withdrawn    = isWithdrawn (excluded from billing — shown separately for completeness)
+//
+// The 16 actual statuses are shown in StatusTable below the breakdown bar.
 
 export function getStatusBreakdown(kind: AssessmentKind): BreakdownSegment[] {
   const { icaa, isa } = getDataset();
   const set = kind === "ICAA" ? icaa : isa;
 
-  const counts = new Map<LifecycleBucket, number>();
+  let inProgress = 0, completed = 0, rejected = 0, withdrawn = 0;
   for (const a of set) {
-    const b = lifecycleBucket(a.status);
-    counts.set(b, (counts.get(b) ?? 0) + 1);
+    if (isInProgress(a.kind, a.status)) inProgress++;
+    else if (isWithdrawn(a.status)) withdrawn++;
+    else if (isRejected(a.status)) rejected++;
+    else completed++;
   }
-  const order: LifecycleBucket[] = [
-    "Not started",
-    "With requester",
-    "Pending owner approval",
-    "In security review",
-    "Completed",
-    "Rejected",
-    "Withdrawn",
-    "Archived",
+
+  const segments: BreakdownSegment[] = [
+    { label: "In-progress", value: inProgress, color: "var(--info)" },
+    { label: "Completed", value: completed, color: "var(--ok)" },
+    { label: "Rejected", value: rejected, color: "var(--bad)" },
+    { label: "Withdrawn", value: withdrawn, color: "var(--ink-4)" },
   ];
-  return order
-    .filter((k) => (counts.get(k) ?? 0) > 0)
-    .map((k) => ({ label: k, value: counts.get(k) ?? 0, color: BUCKET_COLOR[k] }));
+  return segments.filter((s) => s.value > 0);
 }
 
 // Detailed (overdue split) — for the granular status table.
@@ -460,7 +465,7 @@ export function getMonthlyVolume(kind: AssessmentKind | "ALL", months = 12): Mon
 export function getAgeBuckets(kind: AssessmentKind | "ALL"): AgeBucket[] {
   const { icaa, isa } = getDataset();
   const set: Assessment[] = kind === "ALL" ? [...icaa, ...isa] : kind === "ICAA" ? icaa : isa;
-  const inFlight = set.filter((a) => !isTerminal(a.kind, a.status));
+  const inFlight = set.filter((a) => isInProgress(a.kind, a.status));
   const buckets = [
     { label: "0–7d", count: 0, max: 7 },
     { label: "8–14d", count: 0, max: 14 },
@@ -480,7 +485,7 @@ export function getAgeBuckets(kind: AssessmentKind | "ALL"): AgeBucket[] {
 export function getDaysOverdueDistribution(kind: AssessmentKind | "ALL"): AgeBucket[] {
   const { icaa, isa } = getDataset();
   const set: Assessment[] = kind === "ALL" ? [...icaa, ...isa] : kind === "ICAA" ? icaa : isa;
-  const overdue = set.filter((a) => !isTerminal(a.kind, a.status) && isOverdue(a.status));
+  const overdue = set.filter((a) => isInProgress(a.kind, a.status) && isOverdue(a.status));
   const buckets = [
     { label: "1–3d", count: 0, max: 3 },
     { label: "4–7d", count: 0, max: 7 },
@@ -496,13 +501,40 @@ export function getDaysOverdueDistribution(kind: AssessmentKind | "ALL"): AgeBuc
   return buckets.map(({ label, count }) => ({ label, count }));
 }
 
+// ---------- Withdrawn (excluded from billing — shown separately) ----------
+
+export interface WithdrawnStats {
+  total: number;
+  last30d: number;
+  monthly: MonthlyPoint[];
+}
+
+export function getWithdrawnStats(kind: AssessmentKind | "ALL", months = 12): WithdrawnStats {
+  const { icaa, isa } = getDataset();
+  const set: Assessment[] = kind === "ALL" ? [...icaa, ...isa] : kind === "ICAA" ? icaa : isa;
+  const withdrawn = set.filter((a) => isWithdrawn(a.status));
+  const last30d = withdrawn.filter((a) => a.dateWithdrawn && daysAgo(a.dateWithdrawn) <= 30).length;
+  const monthly = lastNMonthKeys(months).map(({ key, label, date }) => {
+    const s = startOfMonth(date), e = endOfMonth(date);
+    return {
+      month: key,
+      label,
+      value: withdrawn.filter((a) => a.dateWithdrawn && a.dateWithdrawn >= s && a.dateWithdrawn <= e).length,
+    };
+  });
+  return { total: withdrawn.length, last30d, monthly };
+}
+
 // ---------- Watchlists ----------
 
 function toWatchlist(a: Assessment, meta: string): WatchlistItem {
+  const { people } = getDataset();
+  const lookup = new Map(people.map((p) => [p.code, p.name]));
   return {
     id: a.id,
     application: a.applicationName,
     reviewer: a.reviewer,
+    reviewerName: a.reviewer ? lookup.get(a.reviewer) ?? a.reviewer : null,
     status: shortStatus(a.status),
     pillVariant: pillVariantFor(a.status),
     meta,
@@ -513,7 +545,7 @@ export function getOverdueWatchlist(kind: AssessmentKind | "ALL", limit = 10): W
   const { icaa, isa } = getDataset();
   const set: Assessment[] = kind === "ALL" ? [...icaa, ...isa] : kind === "ICAA" ? icaa : isa;
   return set
-    .filter((a) => !isTerminal(a.kind, a.status) && isOverdue(a.status))
+    .filter((a) => isInProgress(a.kind, a.status) && isOverdue(a.status))
     .sort((a, b) => b.daysOverdue - a.daysOverdue)
     .slice(0, limit)
     .map((a) => toWatchlist(a, `+${Math.round(a.daysOverdue)}d overdue`));
@@ -523,7 +555,7 @@ export function getApproachingBreachWatchlist(kind: AssessmentKind | "ALL", limi
   const { icaa, isa } = getDataset();
   const set: Assessment[] = kind === "ALL" ? [...icaa, ...isa] : kind === "ICAA" ? icaa : isa;
   return set
-    .filter((a) => !isTerminal(a.kind, a.status) && !isOverdue(a.status))
+    .filter((a) => isInProgress(a.kind, a.status) && !isOverdue(a.status))
     .map((a) => ({ a, ratio: a.hoursForSbdToReview / SLA_HOURS[a.kind] }))
     .filter((x) => x.ratio >= 0.6)
     .sort((x, y) => y.ratio - x.ratio)
@@ -535,7 +567,7 @@ export function getStaleUnassigned(limit = 10): WatchlistItem[] {
   const { icaa, isa } = getDataset();
   const all = [...icaa, ...isa];
   return all
-    .filter((a) => !isTerminal(a.kind, a.status) && a.reviewer === null)
+    .filter((a) => isInProgress(a.kind, a.status) && a.reviewer === null)
     .sort((a, b) => b.daysUnassigned - a.daysUnassigned)
     .slice(0, limit)
     .map((a) => toWatchlist(a, `${Math.round(a.daysUnassigned)}d unassigned`));
@@ -654,7 +686,7 @@ export function getReviewerLoads(): ReviewerLoad[] {
 
   return [...codes].map((code) => {
     const mine = all.filter((a) => a.reviewer === code);
-    const active = mine.filter((a) => !isTerminal(a.kind, a.status)).length;
+    const active = mine.filter((a) => isInProgress(a.kind, a.status)).length;
     const closed30 = mine.filter((a) => a.cyberApprovalDate && daysAgo(a.cyberApprovalDate) <= 30);
     const slaOk = closed30.filter((a) => a.hoursForSbdToReview <= SLA_HOURS[a.kind]).length;
     const avgHours = closed30.length > 0
@@ -686,7 +718,7 @@ export function getOrgBreakdown(field: "serviceVpOrg" | "serviceDirectorOrg"): O
     const k = a[field];
     const cur = counts.get(k) ?? { total: 0, inFlight: 0, overdue: 0 };
     cur.total++;
-    if (!isTerminal(a.kind, a.status)) cur.inFlight++;
+    if (isInProgress(a.kind, a.status)) cur.inFlight++;
     if (isOverdue(a.status)) cur.overdue++;
     counts.set(k, cur);
   }
@@ -912,12 +944,21 @@ export function getTimeInStage(kind: AssessmentKind): TimeInStageRow[] {
 
 export interface ListFilters {
   kind: AssessmentKind;
+  // Multi-value filters (URL: comma-joined). When set, only rows matching
+  // any value in the list pass.
+  statusIn?: string[];
+  reviewerIn?: string[];
+  riskCatIn?: string[];
+  // Single-value filters
   status?: string;
   reviewer?: string;
   riskCat?: string;
   overdueOnly?: boolean;
   inFlightOnly?: boolean;
   search?: string;
+  // Sort
+  sortKey?: string;             // column key (one of the AssessmentTable sortable keys)
+  sortDir?: "asc" | "desc";
 }
 
 export interface ListResult {
@@ -925,13 +966,52 @@ export interface ListResult {
   total: number;
 }
 
+type AssessmentSortKey =
+  | "id"
+  | "applicationName"
+  | "reviewer"
+  | "inherentRiskCategorization"
+  | "hoursForSbdToReview"
+  | "status"
+  | "dateSent"
+  | "dateDue";
+
+const RISK_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3, Critical: 4 };
+
+function getSortValue(a: Assessment, key: AssessmentSortKey): string | number | Date {
+  switch (key) {
+    case "id": return a.id;
+    case "applicationName": return a.applicationName;
+    case "reviewer": return a.reviewer ?? "";
+    case "inherentRiskCategorization": return RISK_RANK[a.inherentRiskCategorization] ?? 0;
+    case "hoursForSbdToReview": return a.hoursForSbdToReview / SLA_HOURS[a.kind];
+    case "status": return shortStatus(a.status);
+    case "dateSent": return a.dateSent;
+    case "dateDue": return a.dateDue;
+  }
+}
+
+function compareSort(a: string | number | Date, b: string | number | Date): number {
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+}
+
 export function listAssessments(filters: ListFilters, page = 1, pageSize = 25): ListResult {
   const { icaa, isa } = getDataset();
   const set: Assessment[] = filters.kind === "ICAA" ? icaa : isa;
+
+  const statusSet = filters.statusIn && filters.statusIn.length > 0 ? new Set(filters.statusIn) : null;
+  const reviewerSet = filters.reviewerIn && filters.reviewerIn.length > 0 ? new Set(filters.reviewerIn) : null;
+  const riskSet = filters.riskCatIn && filters.riskCatIn.length > 0 ? new Set(filters.riskCatIn) : null;
+
   const filtered = set.filter((a) => {
     if (filters.status && a.status !== filters.status) return false;
     if (filters.reviewer && a.reviewer !== filters.reviewer) return false;
     if (filters.riskCat && a.inherentRiskCategorization !== filters.riskCat) return false;
+    if (statusSet && !statusSet.has(a.status)) return false;
+    if (reviewerSet && !reviewerSet.has(a.reviewer ?? "(unassigned)")) return false;
+    if (riskSet && !riskSet.has(a.inherentRiskCategorization)) return false;
     if (filters.overdueOnly && !isOverdue(a.status)) return false;
     if (filters.inFlightOnly && isTerminal(a.kind, a.status)) return false;
     if (filters.search) {
@@ -941,21 +1021,27 @@ export function listAssessments(filters: ListFilters, page = 1, pageSize = 25): 
     return true;
   });
 
-  // Sort: in-flight first (overdue, then oldest); terminal records by most
-  // recent cyber-approval (or fallback to dateSent if not approved).
-  filtered.sort((a, b) => {
-    const aDone = isTerminal(a.kind, a.status), bDone = isTerminal(b.kind, b.status);
-    if (aDone !== bDone) return aDone ? 1 : -1;
-    if (!aDone) {
-      const aO = isOverdue(a.status) ? 1 : 0;
-      const bO = isOverdue(b.status) ? 1 : 0;
-      if (aO !== bO) return bO - aO;
-      return a.dateSent.getTime() - b.dateSent.getTime();
-    }
-    const aT = a.cyberApprovalDate?.getTime() ?? a.dateSent.getTime();
-    const bT = b.cyberApprovalDate?.getTime() ?? b.dateSent.getTime();
-    return bT - aT;
-  });
+  if (filters.sortKey) {
+    const key = filters.sortKey as AssessmentSortKey;
+    const dir = filters.sortDir === "asc" ? 1 : -1;
+    filtered.sort((a, b) => compareSort(getSortValue(a, key), getSortValue(b, key)) * dir);
+  } else {
+    // Default: in-flight first (overdue, then oldest); terminal by most recent
+    // cyber approval (or dateSent if not approved).
+    filtered.sort((a, b) => {
+      const aDone = isTerminal(a.kind, a.status), bDone = isTerminal(b.kind, b.status);
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      if (!aDone) {
+        const aO = isOverdue(a.status) ? 1 : 0;
+        const bO = isOverdue(b.status) ? 1 : 0;
+        if (aO !== bO) return bO - aO;
+        return a.dateSent.getTime() - b.dateSent.getTime();
+      }
+      const aT = a.cyberApprovalDate?.getTime() ?? a.dateSent.getTime();
+      const bT = b.cyberApprovalDate?.getTime() ?? b.dateSent.getTime();
+      return bT - aT;
+    });
+  }
 
   const start = (page - 1) * pageSize;
   return { rows: filtered.slice(start, start + pageSize), total: filtered.length };

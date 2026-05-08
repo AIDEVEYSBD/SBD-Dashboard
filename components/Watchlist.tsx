@@ -11,6 +11,9 @@ export function Watchlist({ items, emptyMessage = "Nothing matches today." }: { 
         <div className="row" key={it.id}>
           <span className="id">{it.id}</span>
           <span className="name">{it.application}</span>
+          <span className="reviewer">
+            {it.reviewerName ?? <span className="muted">unassigned</span>}
+          </span>
           <Pill variant={it.pillVariant}>{it.status}</Pill>
           <span className="meta">{it.meta}</span>
         </div>

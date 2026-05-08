@@ -1,7 +1,26 @@
 // Real ICAA/ISA status taxonomies (from user) — the (Overdue) twin is encoded
 // directly in the status string, not a separate flag.
 //
-// We provide helpers for: terminal vs in-flight, base vs overdue, and pill variant.
+// Lifecycle buckets (used by metrics throughout the dashboard):
+//
+//   Completed-like  — counts as DONE for SLA / conversion / throughput.
+//                     Includes the post-cyber-approval pending stages because
+//                     by the time an assessment reaches "Pending X Approval"
+//                     the reviewer has already approved it.
+//                     ICAA: Completed, ICAA Archived, Pending Business Owner Approval (+ Overdue)
+//                     ISA:  Completed, Pending Cyber Manager Approval (+ Overdue),
+//                            Pending Service Owner Approval (+ Overdue)
+//
+//   Withdrawn       — excluded from headline metrics (no billing). Shown
+//                     separately on each page.
+//                     ICAA: Withdrawn by requestor
+//                     ISA:  Withdrawn
+//
+//   Rejected        — counted as terminal. Visible in volume / breakdowns.
+//                     ICAA: Rejected by Security
+//                     ISA:  Rejected
+//
+//   In-progress     — everything else. The "in flight" count.
 
 import type { AssessmentKind, PillVariant } from "./types";
 
@@ -46,24 +65,59 @@ export const ISA_STATUSES = [
 export type IcaaStatus = (typeof ICAA_STATUSES)[number];
 export type IsaStatus = (typeof ISA_STATUSES)[number];
 
-const TERMINAL_ICAA = new Set<string>([
+// ---------- Bucket sets (literal status strings, with overdue twins) ----------
+
+const ICAA_COMPLETED_LIKE = new Set<string>([
   "Completed",
   "ICAA Archived",
-  "Rejected by Security",
-  "Withdrawn by requestor",
+  "Pending Business Owner Approval",
+  "Pending Business Owner Approval (Overdue)",
 ]);
-const TERMINAL_ISA = new Set<string>([
+const ISA_COMPLETED_LIKE = new Set<string>([
   "Completed",
-  "Rejected",
-  "Withdrawn",
+  "Pending Cyber Manager Approval",
+  "Pending Cyber Manager Approval (Overdue)",
+  "Pending Service Owner Approval",
+  "Pending Service Owner Approval (Overdue)",
 ]);
+
+const WITHDRAWN = new Set<string>([
+  "Withdrawn by requestor",  // ICAA
+  "Withdrawn",               // ISA
+]);
+
+const REJECTED = new Set<string>([
+  "Rejected by Security",    // ICAA
+  "Rejected",                // ISA
+]);
+
+// ---------- Predicates ----------
 
 export function statusesFor(kind: AssessmentKind): readonly string[] {
   return kind === "ICAA" ? ICAA_STATUSES : ISA_STATUSES;
 }
 
+export function isCompletedLike(kind: AssessmentKind, status: string): boolean {
+  return (kind === "ICAA" ? ICAA_COMPLETED_LIKE : ISA_COMPLETED_LIKE).has(status);
+}
+
+export function isWithdrawn(status: string): boolean {
+  return WITHDRAWN.has(status);
+}
+
+export function isRejected(status: string): boolean {
+  return REJECTED.has(status);
+}
+
+// In-progress = "in flight". Anything not completed-like, not withdrawn, not rejected.
+export function isInProgress(kind: AssessmentKind, status: string): boolean {
+  return !isCompletedLike(kind, status) && !isWithdrawn(status) && !isRejected(status);
+}
+
+// Backwards-compat alias used by older call sites — terminal = anything that's
+// not in-progress (completed-like, withdrawn, or rejected).
 export function isTerminal(kind: AssessmentKind, status: string): boolean {
-  return (kind === "ICAA" ? TERMINAL_ICAA : TERMINAL_ISA).has(status);
+  return !isInProgress(kind, status);
 }
 
 export function isOverdue(status: string): boolean {
@@ -72,22 +126,18 @@ export function isOverdue(status: string): boolean {
 
 // Strip "(Overdue)" suffix to roll up overdue twins into base statuses.
 export function baseStatus(status: string): string {
-  // Two patterns: " (Overdue)" or "(Overdue)" inside an existing parenthesized clause.
-  // Examples:
-  //   "Information Requested (from Requestor (Overdue))" -> "Information Requested (from Requestor)"
-  //   "In-progress with requestor (Overdue)"             -> "In-progress with requestor"
   return status
     .replace(/ \(Overdue\)$/, "")
     .replace(/ \(Overdue\)\)$/, ")");
 }
 
-// "Bucket" — the high-level lifecycle phase a status maps into.
-// Used for funnel/pipeline charts where we want fewer than 16 segments.
+// ---------- Lifecycle bucket — for the high-level breakdown chart ----------
+
 export type LifecycleBucket =
   | "Not started"
   | "With requester"
-  | "Pending owner approval"
   | "In security review"
+  | "Pending owner approval"
   | "Completed"
   | "Rejected"
   | "Withdrawn"
@@ -100,7 +150,11 @@ export function lifecycleBucket(status: string): LifecycleBucket {
   if (base === "Rejected by Security" || base === "Rejected") return "Rejected";
   if (base === "Withdrawn by requestor" || base === "Withdrawn") return "Withdrawn";
   if (base.startsWith("Not started")) return "Not started";
-  if (base.startsWith("Pending Business Owner") || base.startsWith("Pending Service Owner") || base.startsWith("Pending Cyber Manager")) {
+  if (
+    base.startsWith("Pending Business Owner") ||
+    base.startsWith("Pending Service Owner") ||
+    base.startsWith("Pending Cyber Manager")
+  ) {
     return "Pending owner approval";
   }
   if (base.startsWith("Security Validation")) return "In security review";
@@ -129,14 +183,11 @@ export const BUCKET_COLOR: Record<LifecycleBucket, string> = {
   "Archived": "var(--ink-5)",
 };
 
-// Map raw status to a pill variant. Overdue always wins over the underlying bucket.
 export function pillVariantFor(status: string): PillVariant {
   if (isOverdue(status)) return "bad";
   return BUCKET_PILL[lifecycleBucket(status)];
 }
 
-// Short label suitable for a pill — drops the "(Overdue)" parenthetical (we encode that
-// via the pill variant). Tightens long status names for chart legends.
 export function shortStatus(status: string): string {
   const base = baseStatus(status);
   return base

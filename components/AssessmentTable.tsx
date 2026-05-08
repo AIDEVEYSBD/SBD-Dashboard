@@ -1,9 +1,10 @@
 "use client";
 
+import { useCallback, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Assessment } from "@/lib/types";
 import { pillVariantFor, shortStatus } from "@/lib/statuses";
 import { SLA_HOURS } from "@/lib/types";
-import { Avatar } from "./Avatar";
 import { Pill } from "./Pill";
 import { Progress } from "./Progress";
 import { SortableTable, type SortableColumn } from "./SortableTable";
@@ -12,8 +13,74 @@ const fmtDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "—");
 
 const RISK_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3, Critical: 4 };
 
+// Map sortable column key → URL param `sortKey` value (server-side
+// listAssessments understands the same set).
+const FILTER_PARAM_BY_COL: Record<string, string> = {
+  status: "statusIn",
+  reviewer: "reviewerIn",
+  inherentRiskCategorization: "riskIn",
+};
+
 export function AssessmentTable({ rows, kind }: { rows: Assessment[]; kind: "ICAA" | "ISA" }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const sla = SLA_HOURS[kind];
+
+  // Read current sort + filter state from URL.
+  const sortKey = searchParams.get("sortKey") ?? null;
+  const sortDir = searchParams.get("sortDir") === "asc" ? "asc" : searchParams.get("sortDir") === "desc" ? "desc" : null;
+  const sort = sortKey && sortDir ? { key: sortKey, dir: sortDir as "asc" | "desc" } : null;
+
+  const filters = useMemo<Record<string, Set<string>>>(() => {
+    const out: Record<string, Set<string>> = {};
+    for (const [colKey, urlKey] of Object.entries(FILTER_PARAM_BY_COL)) {
+      const v = searchParams.get(urlKey);
+      if (v) {
+        const items = v.split(",").filter(Boolean);
+        if (items.length > 0) out[colKey] = new Set(items);
+      }
+    }
+    return out;
+  }, [searchParams]);
+
+  const pushParams = useCallback(
+    (next: Record<string, string | null>) => {
+      const sp = new URLSearchParams(searchParams);
+      for (const [k, v] of Object.entries(next)) {
+        if (v === null || v === "") sp.delete(k);
+        else sp.set(k, v);
+      }
+      // Reset pagination whenever sort or filter changes.
+      sp.delete("page");
+      const qs = sp.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
+  const onSortChange = useCallback(
+    (next: { key: string; dir: "asc" | "desc" } | null) => {
+      pushParams({
+        sortKey: next?.key ?? null,
+        sortDir: next?.dir ?? null,
+      });
+    },
+    [pushParams],
+  );
+
+  const onFiltersChange = useCallback(
+    (next: Record<string, Set<string>>) => {
+      const updates: Record<string, string | null> = {};
+      for (const colKey of Object.keys(FILTER_PARAM_BY_COL)) {
+        const urlKey = FILTER_PARAM_BY_COL[colKey]!;
+        const set = next[colKey];
+        updates[urlKey] = set && set.size > 0 ? [...set].join(",") : null;
+      }
+      pushParams(updates);
+    },
+    [pushParams],
+  );
 
   const columns: SortableColumn<Assessment>[] = [
     {
@@ -31,20 +98,22 @@ export function AssessmentTable({ rows, kind }: { rows: Assessment[]; kind: "ICA
     {
       key: "reviewer",
       label: "Reviewer",
+      filterable: true,
       sortValue: (r) => r.reviewer ?? "",
+      filterValue: (r) => r.reviewer ?? "(unassigned)",
       render: (r) =>
         r.reviewer ? (
-          <span className="who">
-            <Avatar code={r.reviewer} />
-          </span>
+          <span style={{ fontSize: 13 }}>{r.reviewer}</span>
         ) : (
-          <span className="muted" style={{ fontSize: 12 }}>unassigned</span>
+          <span className="muted" style={{ fontSize: 12, fontStyle: "italic" }}>unassigned</span>
         ),
     },
     {
       key: "inherentRiskCategorization",
       label: "Risk",
+      filterable: true,
       sortValue: (r) => RISK_RANK[r.inherentRiskCategorization] ?? 0,
+      filterValue: (r) => r.inherentRiskCategorization,
       render: (r) => <span className="muted">{r.inherentRiskCategorization}</span>,
     },
     {
@@ -69,7 +138,9 @@ export function AssessmentTable({ rows, kind }: { rows: Assessment[]; kind: "ICA
     {
       key: "status",
       label: "Status",
+      filterable: true,
       sortValue: (r) => shortStatus(r.status),
+      filterValue: (r) => r.status,
       render: (r) => <Pill variant={pillVariantFor(r.status)}>{shortStatus(r.status)}</Pill>,
     },
     {
@@ -92,6 +163,10 @@ export function AssessmentTable({ rows, kind }: { rows: Assessment[]; kind: "ICA
       columns={columns}
       rowKey={(r) => r.id}
       emptyMessage="No matches."
+      controlledSort={sort}
+      onSortChange={onSortChange}
+      controlledFilters={filters}
+      onFiltersChange={onFiltersChange}
     />
   );
 }

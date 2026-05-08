@@ -11,6 +11,7 @@ import { StackedBarChart } from "@/components/Chart";
 import { TimeInStageBars } from "@/components/TimeInStageBars";
 import { Topbar } from "@/components/Topbar";
 import { TrendChartClient } from "@/components/TrendChartClient";
+import { WithdrawnNote } from "@/components/WithdrawnNote";
 import {
   getCriticalityBreakdown,
   getDailyInFlight,
@@ -24,13 +25,24 @@ import {
   getStatusRows,
   getTimeInStage,
   getWipMonthly,
+  getWithdrawnStats,
   listAssessments,
 } from "@/lib/queries";
 
 export default async function IsaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; risk?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    risk?: string;
+    q?: string;
+    page?: string;
+    sortKey?: string;
+    sortDir?: string;
+    statusIn?: string;
+    reviewerIn?: string;
+    riskIn?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const view = sp.view ?? "in-flight";
@@ -38,6 +50,11 @@ export default async function IsaPage({
   const q = sp.q ?? "";
   const page = Math.max(1, Number(sp.page) || 1);
   const pageSize = 25;
+  const sortKey = sp.sortKey;
+  const sortDir = sp.sortDir === "asc" ? "asc" : sp.sortDir === "desc" ? "desc" : undefined;
+  const statusIn = sp.statusIn ? sp.statusIn.split(",").filter(Boolean) : undefined;
+  const reviewerIn = sp.reviewerIn ? sp.reviewerIn.split(",").filter(Boolean) : undefined;
+  const riskIn = sp.riskIn ? sp.riskIn.split(",").filter(Boolean) : undefined;
 
   const kpis = getKindKpis("ISA");
   const trend = getDailyInFlight("ISA", 30);
@@ -50,6 +67,7 @@ export default async function IsaPage({
   const hosting = getHostingBreakdown("ISA");
   const timeInStage = getTimeInStage("ISA");
   const wip = getWipMonthly("ISA", 12);
+  const withdrawn = getWithdrawnStats("ISA");
   const design = getDesignScoreStats();
 
   const list = listAssessments(
@@ -59,6 +77,11 @@ export default async function IsaPage({
       inFlightOnly: view !== "any",
       riskCat: risk === "Any" ? undefined : risk,
       search: q || undefined,
+      sortKey,
+      sortDir,
+      statusIn,
+      reviewerIn,
+      riskCatIn: riskIn,
     },
     page,
     pageSize,
@@ -75,6 +98,8 @@ export default async function IsaPage({
         />
 
         <KpiStripClient tiles={kpis} />
+
+        <WithdrawnNote stats={withdrawn} kind="ISA" />
 
         <div className="grid-2-1">
           <Card title="In-flight ISAs — last 30 days" sub="Daily count.">
