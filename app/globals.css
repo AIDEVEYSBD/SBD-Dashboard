@@ -406,7 +406,24 @@ button { font: inherit; }
   margin: 2px 0 0;
   font-weight: 400;
 }
-.card-body { padding: var(--s-5); }
+.card-body {
+  padding: var(--s-5);
+  /* Cap card body height so content scrolls inside instead of pushing the
+     page taller. Pages that need a fixed-shorter card can override via the
+     Card `maxBody` prop (style attribute). */
+  max-height: var(--card-max-h, 540px);
+  overflow-y: auto;
+  /* Subtle scrollbar so it doesn't feel jarring */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-5) transparent;
+}
+.card-body::-webkit-scrollbar { width: 8px; }
+.card-body::-webkit-scrollbar-thumb {
+  background: var(--ink-5);
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+}
+.card-body::-webkit-scrollbar-track { background: transparent; }
 .card-tight .card-body { padding: 0; }
 
 /* ---------- KPI ---------- */
@@ -640,6 +657,26 @@ button { font: inherit; }
 .table .muted { color: var(--ink-3); }
 
 .tag-list { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Sortable table header indicator */
+.table.sortable thead th {
+  transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
+}
+.table.sortable thead th:hover {
+  color: var(--ink);
+  background: var(--bg-2);
+}
+.sort-indicator {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.4;
+  transition: opacity var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.sort-indicator.active {
+  opacity: 1;
+  color: var(--accent);
+}
+.table.sortable thead th:hover .sort-indicator { opacity: 0.85; }
 
 /* ---------- Avatar ---------- */
 .who { display: inline-flex; align-items: center; gap: 8px; }
