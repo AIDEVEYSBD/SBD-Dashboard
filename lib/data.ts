@@ -190,10 +190,14 @@ export function getDataset(): Dataset {
 }
 
 // Read the raw JSON shape directly — used by the import route to merge with
-// existing records before writing back.
+// existing records before writing back. Tolerates missing / empty / malformed
+// JSON by returning an empty dataset so the very-first import can proceed
+// against a fresh file.
 export function readRawDataset(): RawDataset {
   try {
-    return JSON.parse(readFileSync(JSON_PATH, "utf8")) as RawDataset;
+    const text = readFileSync(JSON_PATH, "utf8").trim();
+    if (text.length === 0) return { icaa: [], isa: [] };
+    return JSON.parse(text) as RawDataset;
   } catch {
     return { icaa: [], isa: [] };
   }

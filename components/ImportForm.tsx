@@ -30,15 +30,10 @@ function UploadZone({
   onChange: (f: File | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // The native <label>+<input type="file"> association handles the click —
+  // no JS needed. We only style the wrapper.
   return (
-    <label
-      className={`upload-zone${file ? " has-file" : ""}`}
-      onClick={(e) => {
-        // Forward label clicks to the hidden input.
-        e.preventDefault();
-        inputRef.current?.click();
-      }}
-    >
+    <label className={`upload-zone${file ? " has-file" : ""}`}>
       <input
         ref={inputRef}
         type="file"
@@ -57,6 +52,8 @@ function UploadZone({
             type="button"
             className="upload-zone-clear"
             onClick={(e) => {
+              // Keep the click from re-opening the picker via the label.
+              e.preventDefault();
               e.stopPropagation();
               onChange(null);
               if (inputRef.current) inputRef.current.value = "";
